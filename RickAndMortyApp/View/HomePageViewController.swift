@@ -6,6 +6,7 @@
 //
 
 import UIKit
+import Kingfisher
 
 class HomePageViewController: UIViewController {
     
@@ -57,7 +58,8 @@ extension HomePageViewController : UICollectionViewDelegate , UICollectionViewDa
         let characterViewModel = characterListViewModel.cellForRowAt(indexPath.row)
         cell.characterNameLabel.text = characterViewModel.name
         cell.characterStatus.text = characterViewModel.status
-        cell.characterImage.image = UIImage(named: "rick")
+        let url = URL(string: characterViewModel.image)
+        cell.characterImage.kf.setImage(with: url)
         cell.layer.borderWidth = 0.5
         cell.layer.borderColor = UIColor.lightGray.cgColor
         return cell
