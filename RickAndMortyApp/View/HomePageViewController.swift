@@ -11,7 +11,11 @@ import Kingfisher
 class HomePageViewController: UIViewController {
     
     private var characterListViewModel : CharacterListViewModel!
-
+    var hasMoreContent = true
+    var page = 1
+    var characterList = [Results]()
+    var characterCount = 0
+    
     @IBOutlet weak var characterCollectionView: UICollectionView!
     @IBOutlet weak var searchBar: UISearchBar!
     override func viewDidLoad() {
@@ -21,9 +25,12 @@ class HomePageViewController: UIViewController {
         
         characterCollectionView.delegate = self
         characterCollectionView.dataSource = self
+        searchBar.delegate = self
         
         collectionViewConfigure()
-        getData()
+        fetchCharacterCount()
+        getData(page: page)
+        
     }
     func collectionViewConfigure(){
         let design : UICollectionViewFlowLayout = UICollectionViewFlowLayout()
@@ -35,17 +42,39 @@ class HomePageViewController: UIViewController {
         design.minimumLineSpacing = 5
         characterCollectionView!.collectionViewLayout = design
     }
-    func getData(){
-        WebService.shared.getAllCharacterData { result in
+    func getData(page : Int){
+        WebService.shared.getAllCharacterData(page: page) { result in
             switch result {
             case .success(let characters):
-                self.characterListViewModel = CharacterListViewModel(resultList: characters)
+                if self.characterCount - self.characterList.count < 20 { self.hasMoreContent = false }
+                self.characterList += characters
+                self.characterListViewModel = CharacterListViewModel(resultList: self.characterList)
                 DispatchQueue.main.async {
                     self.characterCollectionView.reloadData()
                 }
             case .failure(let error):
                 print(error)
             }
+        }
+    }
+    func fetchCharacterCount(){
+        WebService.shared.getCharacterCount { result in
+            switch result{
+            case .success(let response):
+                self.characterCount = response?.info?.count ?? 0
+            case .failure(let error):
+                print(error)
+            }
+        }
+    }
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        let offsetY = scrollView.contentOffset.y
+        let contentHeight = scrollView.contentSize.height
+        let height = scrollView.frame.size.height
+        if offsetY > contentHeight - height {
+            guard hasMoreContent else { return }
+            page += 1
+            getData(page : page)
         }
     }
 }
@@ -63,6 +92,34 @@ extension HomePageViewController : UICollectionViewDelegate , UICollectionViewDa
         cell.layer.borderWidth = 0.5
         cell.layer.borderColor = UIColor.lightGray.cgColor
         return cell
+    }
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        //performSegue(withIdentifier: <#T##String#>, sender: <#T##Any?#>)
+    }
+}
+
+extension HomePageViewController : UISearchBarDelegate {
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        print(searchText)
+        searchCharacter(searchText)
+    }
+    func searchCharacter(_ searchtext : String){
+        WebService.shared.searchCharacterByName(searchText: searchtext) { result in
+            switch result{
+            case .success(let character):
+                if character.count > 0 {
+                    self.characterListViewModel = CharacterListViewModel(resultList: character)
+                    DispatchQueue.main.async {
+                        self.characterCollectionView.reloadData()
+                    }
+                }
+            case .failure(let error):
+                self.characterListViewModel.searchNotFound()
+                DispatchQueue.main.async {
+                    self.characterCollectionView.reloadData()
+                }
+            }
+        }
     }
 }
 

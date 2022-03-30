@@ -45,7 +45,8 @@ struct CharacterViewModel{
     
 }
 struct CharacterListViewModel {
-    let resultList : [Results]
+    var resultList : [Results]
+    
     
     func numberOfRowAt ()-> Int {
         return resultList.count
@@ -53,5 +54,8 @@ struct CharacterListViewModel {
     func cellForRowAt(_ index : Int) -> CharacterViewModel{
         let character = resultList[index]
         return CharacterViewModel(character)
+    }
+    mutating func searchNotFound(){
+        self.resultList = []
     }
 }

@@ -29,7 +29,6 @@ struct Results  : Decodable {
     let image : String?
     let location : Location
     let episode : [String]
-    
 }
 
 struct Location : Decodable {
