@@ -15,6 +15,14 @@ class HomePageViewController: UIViewController {
     var page = 1
     var characterList = [Results]()
     var characterCount = 0
+    var selectedCharacter : Results!
+    var filterList = [String]()
+    var filtered = false
+    var searchList = [Results]()
+    var search = false
+    var searchText = ""
+    var pageCount = 1
+
     
     @IBOutlet weak var characterCollectionView: UICollectionView!
     @IBOutlet weak var searchBar: UISearchBar!
@@ -27,10 +35,19 @@ class HomePageViewController: UIViewController {
         characterCollectionView.dataSource = self
         searchBar.delegate = self
         
+        let filterIcon = UIImage(named: "filterIcon")
+        navigationItem.rightBarButtonItem = UIBarButtonItem(image : filterIcon, style: UIBarButtonItem.Style.plain, target: self, action: #selector(showFilterMenu))
+        
         collectionViewConfigure()
         fetchCharacterCount()
         getData(page: page)
         
+    }
+    override func viewWillAppear(_ animated: Bool) {
+        NotificationCenter.default.addObserver(self, selector: #selector(getFilteredCharacters(_:)), name: NSNotification.Name("newData"), object: nil)
+    }
+    @objc func showFilterMenu(){
+        performSegue(withIdentifier: "toFilterMenu", sender: nil)
     }
     func collectionViewConfigure(){
         let design : UICollectionViewFlowLayout = UICollectionViewFlowLayout()
@@ -43,6 +60,7 @@ class HomePageViewController: UIViewController {
         characterCollectionView!.collectionViewLayout = design
     }
     func getData(page : Int){
+        self.filtered = false
         WebService.shared.getAllCharacterData(page: page) { result in
             switch result {
             case .success(let characters):
@@ -67,14 +85,54 @@ class HomePageViewController: UIViewController {
             }
         }
     }
+    
+    func searchCharacterCount(searchText : String){
+        WebService.shared.searchCharacterCount(searchText: searchText){ result in
+            switch result{
+            case .success(let response):
+                self.pageCount = response?.info?.pages ?? 0
+            case .failure(let error):
+                print(error)
+            }
+        }
+    }
+    @objc func getFilteredCharacters(_ notification: NSNotification){
+        self.filtered = true
+        if let gender = notification.userInfo?["gender"] as? String{
+            if let status = notification.userInfo?["status"] as? String {
+                WebService.shared.getFilteredCharacters(gender: gender, status: status) { result in
+                    switch result{
+                    case .success(let character):
+                        if character.count > 0 {
+                            self.characterListViewModel = CharacterListViewModel(resultList: character)
+                            DispatchQueue.main.async {
+                                self.characterCollectionView.reloadData()
+                            }
+                        }
+                    case .failure(let error):
+                        print(error)
+                    }
+                }
+            }
+        }
+    }
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-        let offsetY = scrollView.contentOffset.y
-        let contentHeight = scrollView.contentSize.height
-        let height = scrollView.frame.size.height
-        if offsetY > contentHeight - height {
-            guard hasMoreContent else { return }
-            page += 1
-            getData(page : page)
+        if filtered == false{
+            let offsetY = scrollView.contentOffset.y
+            let contentHeight = (scrollView.contentSize.height) - 250
+            let height = scrollView.frame.size.height
+            if offsetY > contentHeight - height {
+                guard hasMoreContent else { return }
+                page += 1
+                if search == false {
+                    getData(page : page)
+                }
+                else{
+                    if page <= pageCount{
+                        searchCharacter(page: page,self.searchText)
+                    }
+                }
+            }
         }
     }
 }
@@ -94,26 +152,48 @@ extension HomePageViewController : UICollectionViewDelegate , UICollectionViewDa
         return cell
     }
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        //performSegue(withIdentifier: <#T##String#>, sender: <#T##Any?#>)
+        self.selectedCharacter = characterListViewModel.resultList[indexPath.row]
+        performSegue(withIdentifier: "toCharacterDetailsVC", sender: nil)
+        
+    }
+    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
+        if segue.identifier == "toCharacterDetailsVC"{
+            let destinationVC = segue.destination as! CharacterDetailsViewController
+            destinationVC.chosenCharacter = selectedCharacter
+        }
     }
 }
 
 extension HomePageViewController : UISearchBarDelegate {
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
-        print(searchText)
-        searchCharacter(searchText)
+        search = true
+        searchCharacterCount(searchText: searchText)
+        self.searchText = searchText
+        self.searchList.removeAll(keepingCapacity: false)
+        searchCharacter(page : 1 , self.searchText)
+        if searchText == "" {
+            search = false
+            page = 1
+            characterList.removeAll(keepingCapacity: false)
+            getData(page: page)
+        }
     }
-    func searchCharacter(_ searchtext : String){
-        WebService.shared.searchCharacterByName(searchText: searchtext) { result in
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        searchBar.endEditing(true)
+    }
+    func searchCharacter(page : Int , _ searchtext : String){
+        print(self.characterListViewModel.numberOfRowAt())
+        WebService.shared.searchCharacterByName(page : page ,searchText: searchtext) {  result in
             switch result{
-            case .success(let character):
-                if character.count > 0 {
-                    self.characterListViewModel = CharacterListViewModel(resultList: character)
+            case .success(let characters):
+                if characters.count > 0 {
+                    self.searchList += characters
+                    self.characterListViewModel = CharacterListViewModel(resultList: self.searchList)
                     DispatchQueue.main.async {
                         self.characterCollectionView.reloadData()
                     }
                 }
-            case .failure(let error):
+            case .failure(_):
                 self.characterListViewModel.searchNotFound()
                 DispatchQueue.main.async {
                     self.characterCollectionView.reloadData()
