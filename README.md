@@ -3,7 +3,7 @@ iOS app created using:
 Swift (UIKit) , 
 MVVM,
 URLSession,
-Kingfisher,
+Kingfisher(Added with Swift package manager),
 PickerView
 
 #### ScreenShots
